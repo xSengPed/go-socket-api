@@ -2,21 +2,27 @@ package main
 
 import (
 	"context"
+	"go-socket-api/configs"
+	"go-socket-api/pkg/members"
 	socketmessage "go-socket-api/pkg/socket_message"
 
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/fx"
+	"gorm.io/gorm"
 )
 
 // NewHttpHandler is a constructor for the http handler
-func NewHttpHandler(lc fx.Lifecycle, messageHandler *socketmessage.Handler) *fiber.App {
+func NewHttpHandler(lc fx.Lifecycle, config *configs.Config, db *gorm.DB, membersHandler *members.MemberHandler, messageHandler *socketmessage.Handler) *fiber.App {
 
+	db.AutoMigrate(&members.Member{})
 	app := fiber.New()
 	api := app.Group("/api")
 	v := api.Group("/v1")
+	ws := v.Group("/ws")
 
+	v.Mount("/member", membersHandler.App)
 	/* Mount for service path*/
-	v.Mount("/socket-message", messageHandler.App)
+	ws.Mount("/socket-message", messageHandler.App)
 
 	/* lc (LifeCycle)  create lc hook*/
 	lc.Append(fx.Hook{
@@ -36,7 +42,7 @@ func NewHttpHandler(lc fx.Lifecycle, messageHandler *socketmessage.Handler) *fib
 func main() {
 	fx.New(
 		/* Provide handler for using for dependency injection (DI)*/
-		fx.Provide(socketmessage.NewHandler),
+		fx.Provide(configs.New, configs.NewDatabaseConnect, members.NewService, members.NewMemberHandler, socketmessage.NewHandler),
 		/* Invoke NewHttpHandler for create fiber app instance then run the api */
 		fx.Invoke(NewHttpHandler),
 	).Run()
